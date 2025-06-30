@@ -21,8 +21,8 @@ from time import gmtime, strftime
 from functools import partial
 from Bio import SeqIO
 
-# (The Tree class and process_kraken_report function from the original
-# script remain unchanged here)
+# (The Tree class and other functions from the previous version
+# remain unchanged here)
 
 class Tree(object):
     'Tree node.'
@@ -108,7 +108,7 @@ def extract_reads_worker(task_args, read_ids_to_save, filetype, fastq_out):
     s_file.close()
     o_file.close()
 
-    sys.stdout.write(f">> Worker finished for: {os.path.basename(seq_file)}. Extracted {count_output} reads.\n")
+    sys.stdout.write(f">> Worker finished for: {os.path.basename(seq_file)}. Extracted {count_output} reads to {output_file}\n")
     sys.stdout.flush()
     return (output_file, count_output)
 
@@ -119,6 +119,7 @@ def main():
     parser.add_argument('-s', '--seq-files', dest='seq_files', required=True, nargs='+', help='Space-delimited list of FASTA/FASTQ files to process.')
     parser.add_argument('-t', "--taxid", dest='taxid', required=True, nargs='+', help='Taxonomy ID(s) of reads to extract (space-delimited)')
     parser.add_argument('--output-suffix', dest='output_suffix', default=".extracted.fq", help='Suffix to append to input filenames for output files [default: .extracted.fq]')
+    parser.add_argument('--out-dir', dest='out_dir', default='.', help='Destination folder to store output files [default: current directory]')
     parser.add_argument('-r','--report', dest='report_file', default="", help='Kraken report file. [required only if --include-parents/children is specified]')
     parser.add_argument('--include-parents', dest="parents", action='store_true', default=False, help='Include reads classified at parent levels of the specified taxids')
     parser.add_argument('--include-children', dest='children', action='store_true', default=False, help='Include reads classified more specifically than the specified taxids')
@@ -130,6 +131,11 @@ def main():
     args=parser.parse_args()
 
     sys.stdout.write(f"PROGRAM START TIME: {strftime('%m-%d-%Y %H:%M:%S', gmtime())}\n")
+
+    # --- Create output directory if it doesn't exist ---
+    os.makedirs(args.out_dir, exist_ok=True)
+    sys.stdout.write(f">> Output files will be saved in: {os.path.abspath(args.out_dir)}\n")
+
 
     # --- Step 0: Identify all Taxonomy IDs to be included ---
     save_taxids = {int(tid) for tid in args.taxid}
@@ -232,8 +238,12 @@ def main():
         base, _ = os.path.splitext(os.path.basename(seq_file))
         if seq_file.endswith('.gz'):
              base, _ = os.path.splitext(base) # handle .fastq.gz
-        output_file = f"{base}{args.output_suffix}"
-        tasks.append((seq_file, output_file))
+        
+        output_filename = f"{base}{args.output_suffix}"
+        # *** Construct full output path using the destination directory ***
+        output_path = os.path.join(args.out_dir, output_filename)
+        tasks.append((seq_file, output_path))
+
 
     sys.stdout.write(f">> STEP 2: Spawning {args.threads} workers to process {len(tasks)} files in parallel...\n")
 
@@ -259,3 +269,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
